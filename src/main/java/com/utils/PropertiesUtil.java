@@ -1,8 +1,8 @@
 package com.utils;
 
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -16,7 +16,8 @@ public class PropertiesUtil {
 	public static void load(String path) throws FileNotFoundException, IOException {
 		Properties properties = new Properties();
 		URL url = PropertiesUtil.class.getClassLoader().getResource(path);
-		properties.load(new FileInputStream(url.getFile()));
+        InputStream stream = PropertiesUtil.class.getClassLoader().getResourceAsStream(url.getFile());
+		properties.load(stream);
 		Enumeration<?> e = properties.propertyNames();
 		while(e.hasMoreElements()) {
 			String strKey = (String) e.nextElement();

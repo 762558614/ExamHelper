@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -16,8 +15,9 @@ import com.entity.Question;
 public class FileDataLoader implements DataLoader {
 
 	public Map<String, List<Question>> loadData() {
-		URL url = FileDataLoader.class.getClassLoader().getResource("questions");
-		File file = new File(url.getFile());
+//		URL url = FileDataLoader.class.getClassLoader().getResource("questions");
+//		File file = new File(url.getFile());
+		File file = new File("questions");
 		Map<String, List<Question>> subjects = new HashMap<String, List<Question>>();
 		for(File folder : file.listFiles()) {
 			String subject = folder.getName();

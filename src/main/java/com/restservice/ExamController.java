@@ -15,7 +15,10 @@ public class ExamController {
 			@RequestParam(value = "id", defaultValue = "-1") String id, 
 			@RequestParam(value="remember") String remember,
 			@RequestParam(value="subject", defaultValue = QuestionService.SUBJECT_MZD) String subject) {
-		
+		try {
+			QuestionService.getInstance().answerQuestion(1, subject, Integer.valueOf(id), "1".equals(remember));	
+		}catch (Exception e) {
+		}
 		return QuestionService.getInstance().getOneUserQuestion(1, subject);
 	}
 }

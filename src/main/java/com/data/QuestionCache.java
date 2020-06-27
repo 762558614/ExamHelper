@@ -1,6 +1,7 @@
 package com.data;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,9 +9,8 @@ import java.util.Map.Entry;
 import java.util.Set;
 
 import com.entity.Question;
+import com.service.QuestionService;
 import com.utils.redis.AbstractRedisUtil;
-
-import static com.utils.Utils.*;
 
 public class QuestionCache {
 	
@@ -31,7 +31,7 @@ public class QuestionCache {
 	public static final String REDIS_KEY_OLD_QUESTION_PER = "oldQuestions:";
 	public static final String REDIS_KEY_QUESTION_CACHE_PER = "questionCaches:";
 	
-	public static final int QUESTION_TIMEOUT_TIME = 30;
+	public static final int QUESTION_TIMEOUT_TIME = 30*60;
 	
 	private Map<String, Map<Integer, Question>> subjects = new HashMap<>();
 	
@@ -53,18 +53,26 @@ public class QuestionCache {
 	
 	public List<Integer> getOldQuestions(int userId, int size, String subject){
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
-		Set<String> questionIds = redisUtil.zrange(REDIS_KEY_OLD_QUESTION_PER+userId, 0, size-1);
+		Set<String> questionIdsTmp = redisUtil.smembers(REDIS_KEY_OLD_QUESTION_PER+userId);
+		Set<String> questionIds = redisUtil.smembers(REDIS_KEY_OLD_QUESTION_PER+userId);
+		int i=0;
+		for(String id : questionIdsTmp) {
+			if(i==size-1) {
+				break;
+			}
+			questionIds.add(id);
+		}
 		return questionIds.stream().collect(ArrayList::new, (list, idStr)->{list.add(Integer.valueOf(idStr));}, ArrayList::addAll);
 	}
 	
-	public void removeOldQuestion(String questionId) {
+	public void removeOldQuestion(int userId, int questionId) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
-		redisUtil.zrem(REDIS_KEY_OLD_QUESTION_PER+1, questionId);
+		redisUtil.srem(REDIS_KEY_OLD_QUESTION_PER+userId, Integer.toString((questionId)));
 	}
 	
-	public void addOldQuestion(String questionId) {
+	public void addOldQuestion(int questionId) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
-		redisUtil.zadd(REDIS_KEY_OLD_QUESTION_PER+1, System.currentTimeMillis(), questionId);
+		redisUtil.sadd(REDIS_KEY_OLD_QUESTION_PER+1, Integer.toString(questionId));
 	}
 	
 	public List<Integer> getLongestQuestions(int size, String subject) {
@@ -75,9 +83,17 @@ public class QuestionCache {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
 		Set<String> questionIds = redisUtil.zrange(REDIS_KEY_QUESTION_SCORE_PER+"1", start, size);
 		List<Integer> res = new ArrayList<>();
+		StringBuilder builder = new StringBuilder();
+		List<Integer> tmp = new ArrayList<Integer>();
 		for(String questionId : questionIds) {
 			res.add(Integer.valueOf(questionId));
+			tmp.add(Integer.valueOf(questionId));
 		}
+		Collections.sort(tmp);
+		for(int i : tmp) {
+			builder.append(i+", ");
+		}
+		System.out.println(builder.toString());
 		return res;
 	}
 	
@@ -107,7 +123,7 @@ public class QuestionCache {
 				int questionId = questionEntry.getKey();
 				if(!redisUtil.sismember(REDIS_KEY_USER_QUESTION_PER+"1", String.valueOf(questionId))) {
 					redisUtil.sadd(REDIS_KEY_USER_QUESTION_PER+"1", String.valueOf(questionId));
-					touchQuestion(questionId, 0);
+					touchQuestion(questionId, 0, QuestionService.SUBJECT_MZD);
 				}
 			}
 		}
@@ -118,7 +134,7 @@ public class QuestionCache {
 	 * @param questionId
 	 * @param time
 	 */
-	public void touchQuestion(int questionId, long time) {
+	public void touchQuestion(int questionId, long time, String subject) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
 		redisUtil.zadd(REDIS_KEY_QUESTION_SCORE_PER+1, time, String.valueOf(questionId));
 	}

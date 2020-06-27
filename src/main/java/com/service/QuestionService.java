@@ -8,8 +8,8 @@ import com.entity.Question;
 
 public class QuestionService {
 	
-	public static final int PAGE_SIZE = 15;
-	public static final int OLD_PAGE_SIZE = 5;
+	public static final int PAGE_SIZE = 10;
+	public static final int OLD_PAGE_SIZE = 10;
 
 	public static final String SUBJECT_MZD = "12656";
 	public static final String SUBJECT_ENG = "00012";
@@ -36,8 +36,24 @@ public class QuestionService {
 			return q;
 		}else {
 			Question question = QuestionCache.getInstance().getQueestion(subject, questions.get(0));
+			if(question==null) {
+				QuestionCache.getInstance().removeQuestionCache(userId, subject, questions.get(0));
+				return getOneUserQuestion(userId, subject);
+			}
 			QuestionCache.getInstance().removeQuestionCache(userId, subject, question.getId());
 			return question;	
+		}
+	}
+	
+	public void answerQuestion(int userId, String subject, int questionId, boolean isRemeber) {
+		if(questionId<=0) {
+			return ;
+		}
+		if(isRemeber) {
+			QuestionCache.getInstance().removeOldQuestion(userId, questionId);;
+			QuestionCache.getInstance().touchQuestion(questionId, System.currentTimeMillis(), subject);
+		}else {
+			QuestionCache.getInstance().addOldQuestion(questionId);
 		}
 	}
 	
@@ -49,7 +65,7 @@ public class QuestionService {
 	 */
 	public List<Integer> generateQuestion(int userId, String subject) {
 		List<Integer> ids = QuestionCache.getInstance().getOldQuestions(userId, OLD_PAGE_SIZE, subject);
-		int newQuestionSize = PAGE_SIZE+5-ids.size();
+		int newQuestionSize = PAGE_SIZE+5-1-ids.size();
 		ids.addAll(QuestionCache.getInstance().getLongestQuestions(newQuestionSize, subject));
 		return ids;
 	}
