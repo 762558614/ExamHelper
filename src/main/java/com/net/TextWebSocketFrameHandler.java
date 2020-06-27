@@ -31,7 +31,7 @@ public class TextWebSocketFrameHandler extends SimpleChannelInboundHandler<TextW
 	@Override
 	public void channelRead0(ChannelHandlerContext ctx, TextWebSocketFrame msg) throws Exception {
 		int id = Integer.valueOf(msg.text());
-		Question q = QuestionCache.getQueestion("12656", id);
+		Question q = QuestionCache.getInstance().getQueestion("12656", id);
 		String json = JSON.toJSONString(q);
 		TextWebSocketFrame res = new TextWebSocketFrame(json);
 		group.writeAndFlush(res.retain());

@@ -11,32 +11,12 @@ import redis.clients.jedis.ZParams;
 
 public class RedisUtil extends AbstractRedisUtil {
 
-	
-	private static JedisPool pool;
-
-	/**
-	 *连接池
-	*/
-	private static JedisPool getPool(){
-	    if(pool==null){
-	        synchronized (AbstractRedisUtil.class){
-	            if(pool==null){
-	                JedisPoolConfig config = new JedisPoolConfig();
-	                config.setMaxIdle(8);
-	                config.setMaxTotal(18);
-	                pool = new JedisPool(config, "39.100.200.64", 6379, 2000, "123456");
-	            }
-	        }
-	    }
-	    return pool;
-	}
 
 	/**
 	 *连接
 	*/
 	private static Jedis getConn(){
 	    Jedis jedis = getPool().getResource();
-	    jedis.pipelined();
 	    return jedis;
 	}
 

@@ -8,8 +8,6 @@ public class LoadDataTest {
 
 	@Test
 	public void loadData() {
-		QuestionCache.loadData();
-		QuestionCache.initUserData();
 	}
 	
 }

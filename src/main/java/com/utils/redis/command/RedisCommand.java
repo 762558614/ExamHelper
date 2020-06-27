@@ -9,4 +9,6 @@ public interface RedisCommand {
 	 * @return
 	 */
 	boolean expire(String key, int seconds);
+	
+	void submit();
 }

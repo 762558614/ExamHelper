@@ -10,66 +10,68 @@ import java.util.Set;
 import com.entity.Question;
 import com.utils.redis.AbstractRedisUtil;
 
+import static com.utils.Utils.*;
+
 public class QuestionCache {
 	
-	public static final int PAGE_SIZE = 15;
-	public static final int OLD_PAGE_SIZE = 5;
-
-	public static final String SUBJECT_MZD = "12656";
-	public static final String SUBJECT_ENG = "00012";
+	private static QuestionCache INSTANCE ;
+	public static QuestionCache getInstance() {
+		if(INSTANCE==null) {
+			synchronized (QuestionCache.class) {
+				if(INSTANCE==null) {
+					INSTANCE = new QuestionCache();
+				}
+			}
+		}
+		return INSTANCE;
+	}
 	
 	public static final String REDIS_KEY_QUESTION_SCORE_PER = "questions:";
 	public static final String REDIS_KEY_USER_QUESTION_PER = "userQuestions:";
 	public static final String REDIS_KEY_OLD_QUESTION_PER = "oldQuestions:";
+	public static final String REDIS_KEY_QUESTION_CACHE_PER = "questionCaches:";
 	
-	private static Map<String, Map<Integer, Question>> questions = new HashMap<>();
+	public static final int QUESTION_TIMEOUT_TIME = 30;
 	
-	public static Map<Integer, Question> getQuestions(String subject) {
-		if(questions.size() == 0) {
-			loadData();
-		}
-		return questions.get(subject);
+	private Map<String, Map<Integer, Question>> subjects = new HashMap<>();
+	
+	public Map<Integer, Question> getQuestions(String subject) {
+		return subjects.get(subject);
 	}
 	
-	public static Question getQueestion(String subject, int id) {
-		if(questions.size() == 0) {
-			loadData();
-		}
-		return questions.get(subject).get(id);
+	public Question getQueestion(String subject, int id) {
+		return subjects.get(subject).get(id);
 	}
 
-	public static List<Integer> getOldQuestions(){
+	public List<Integer> getUserQuestionCache(int userId, String subject){
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
-		Set<String> questionIds = redisUtil.zrange(REDIS_KEY_OLD_QUESTION_PER+"1", 0, OLD_PAGE_SIZE-1);
-		List<Integer> res = new ArrayList<>();
-		for(String questionId : questionIds) {
-			res.add(Integer.valueOf(questionId));
-		}
-		return res;
-	}
-
-	public static List<Integer> getQuestions(){
-		List<Integer> ids = getOldQuestions();
-		int size = PAGE_SIZE+5-ids.size();
-		ids.addAll(getLongestQuestions(size, SUBJECT_MZD));
+		String key = REDIS_KEY_QUESTION_CACHE_PER+userId+":"+subject;
+		List<Integer> ids = redisUtil.lrange(key, 0, -1).stream().collect(
+				ArrayList::new, (list, idStr)->{list.add(Integer.valueOf(idStr));},ArrayList::addAll);
 		return ids;
 	}
 	
-	public static void removeOldQuestion(String questionId) {
+	public List<Integer> getOldQuestions(int userId, int size, String subject){
+		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
+		Set<String> questionIds = redisUtil.zrange(REDIS_KEY_OLD_QUESTION_PER+userId, 0, size-1);
+		return questionIds.stream().collect(ArrayList::new, (list, idStr)->{list.add(Integer.valueOf(idStr));}, ArrayList::addAll);
+	}
+	
+	public void removeOldQuestion(String questionId) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
 		redisUtil.zrem(REDIS_KEY_OLD_QUESTION_PER+1, questionId);
 	}
 	
-	public static void addOldQuestion(String questionId) {
+	public void addOldQuestion(String questionId) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
 		redisUtil.zadd(REDIS_KEY_OLD_QUESTION_PER+1, System.currentTimeMillis(), questionId);
 	}
 	
-	public static List<Integer> getLongestQuestions(int size, String subject) {
+	public List<Integer> getLongestQuestions(int size, String subject) {
 		return getLongestQuestions(0, size, subject);
 	}
 	
-	public static List<Integer> getLongestQuestions(int start, int size, String subject) {
+	public List<Integer> getLongestQuestions(int start, int size, String subject) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
 		Set<String> questionIds = redisUtil.zrange(REDIS_KEY_QUESTION_SCORE_PER+"1", start, size);
 		List<Integer> res = new ArrayList<>();
@@ -79,9 +81,27 @@ public class QuestionCache {
 		return res;
 	}
 	
-	public static void initUserData() {
+	public void removeQuestionCache(int userId, String subject, int questionId) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
-		for(Entry<String, Map<Integer, Question>> subjectEntry : questions.entrySet()) {
+		String key = REDIS_KEY_QUESTION_CACHE_PER+userId+":"+subject;
+		redisUtil.lpop(key);
+	}
+	
+	public void addQuestionCache(int userId, String subject, List<Integer> questions) {
+		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
+		String[] members = new String[questions.size()];
+		for(int i=0; i<members.length; i++) {
+			members[i] = Integer.toString(questions.get(i));
+		}
+		String key = REDIS_KEY_QUESTION_CACHE_PER+userId+":"+subject;
+		redisUtil.del(key);
+		redisUtil.rpush(key, members);
+		redisUtil.expire(key, QUESTION_TIMEOUT_TIME);
+	}
+	
+	public void initUserData() {
+		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
+		for(Entry<String, Map<Integer, Question>> subjectEntry : subjects.entrySet()) {
 			Map<Integer, Question> subjectQuestions = subjectEntry.getValue();
 			for(Entry<Integer, Question> questionEntry : subjectQuestions.entrySet()) {
 				int questionId = questionEntry.getKey();
@@ -93,19 +113,24 @@ public class QuestionCache {
 		}
 	}
 	
-	public static void touchQuestion(int questionId, long time) {
+	/**
+	 * 	刷新问题的访问时间
+	 * @param questionId
+	 * @param time
+	 */
+	public void touchQuestion(int questionId, long time) {
 		AbstractRedisUtil redisUtil = AbstractRedisUtil.getInstance();
 		redisUtil.zadd(REDIS_KEY_QUESTION_SCORE_PER+1, time, String.valueOf(questionId));
 	}
 	
-	public static void loadData() {
+	public void loadData() {
 		Map<String, List<Question>> subjects = new FileDataLoader().loadData();
 		for(String subjectName : subjects.keySet()) {
 			Map<Integer, Question> questions = new HashMap<>();
 			for(Question q : subjects.get(subjectName)) {
 				questions.put(q.getId(), q);
 			}
-			QuestionCache.questions.put(subjectName, questions);
+			this.subjects.put(subjectName, questions);
 		}
 	}
 }
